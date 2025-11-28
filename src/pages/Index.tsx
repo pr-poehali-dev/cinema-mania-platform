@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -48,8 +48,11 @@ const Index = () => {
   const [uploadPrice, setUploadPrice] = useState(5);
   const [uploadedVideo, setUploadedVideo] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  const [movies, setMovies] = useState<Movie[]>([
+  const [movies, setMovies] = useState<Movie[]>(() => {
+    const saved = localStorage.getItem('kinomania_movies');
+    return saved ? JSON.parse(saved) : [
     {
       id: 1,
       title: 'Космическая Одиссея',
@@ -106,7 +109,48 @@ const Index = () => {
         permanentInterruption: '1111111111'
       }
     }
-  ]);
+  ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('kinomania_coins', coins.toString());
+  }, [coins]);
+
+  useEffect(() => {
+    localStorage.setItem('kinomania_movies', JSON.stringify(movies));
+  }, [movies]);
+
+  useEffect(() => {
+    const savedCoins = localStorage.getItem('kinomania_coins');
+    if (savedCoins) {
+      setCoins(Number(savedCoins));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isPlayingMovie && selectedMovie && videoRef.current) {
+      applyVideoFilters();
+    }
+  }, [isPlayingMovie, selectedMovie]);
+
+  const applyVideoFilters = () => {
+    if (!videoRef.current || !selectedMovie) return;
+
+    const video = videoRef.current;
+    let filterStyle = '';
+
+    if (selectedMovie.codes.grayFrame.includes('2')) {
+      filterStyle += 'grayscale(100%) ';
+    }
+    if (selectedMovie.codes.halfGray.includes('2')) {
+      filterStyle += 'contrast(50%) ';
+    }
+    if (selectedMovie.codes.blackScreen.includes('2')) {
+      filterStyle += 'brightness(0%) ';
+    }
+
+    video.style.filter = filterStyle.trim();
+  };
 
   const handleCoinClick = () => {
     setClickCount((prev) => {
@@ -125,7 +169,8 @@ const Index = () => {
 
   const purchaseMovie = (movie: Movie) => {
     if (coins >= movie.price) {
-      setCoins(coins - movie.price);
+      const newCoins = coins - movie.price;
+      setCoins(newCoins);
       setMovies(
         movies.map((m) =>
           m.id === movie.id ? { ...m, isPurchased: true } : m
@@ -152,16 +197,19 @@ const Index = () => {
 
   const saveCodes = () => {
     if (selectedMovie) {
-      setMovies(
-        movies.map((m) =>
-          m.id === selectedMovie.id ? { ...m, codes: editedCodes } : m
-        )
+      const updatedMovies = movies.map((m) =>
+        m.id === selectedMovie.id ? { ...m, codes: editedCodes } : m
       );
+      setMovies(updatedMovies);
       toast({
         title: '💾 Сохранено',
         description: 'Коды обновлены'
       });
       setIsEditorOpen(false);
+      
+      if (isPlayingMovie && videoRef.current) {
+        applyVideoFilters();
+      }
     }
   };
 
@@ -678,11 +726,38 @@ const Index = () => {
             </DialogHeader>
             <div className="space-y-4">
               {selectedMovie?.videoUrl ? (
-                <video
-                  src={selectedMovie.videoUrl}
-                  controls
-                  className="w-full aspect-video rounded-lg border border-primary/30"
-                />
+                <div className="relative">
+                  <video
+                    ref={videoRef}
+                    src={selectedMovie.videoUrl}
+                    controls
+                    className="w-full aspect-video rounded-lg border border-primary/30"
+                  />
+                  {(selectedMovie.codes.grayFrame.includes('2') ||
+                    selectedMovie.codes.halfGray.includes('2') ||
+                    selectedMovie.codes.blackScreen.includes('2')) && (
+                    <div className="absolute top-2 right-2 flex gap-2">
+                      {selectedMovie.codes.grayFrame.includes('2') && (
+                        <Badge className="bg-red-500/80 text-white animate-pulse-glow">
+                          <Icon name="AlertTriangle" size={14} className="mr-1" />
+                          Серый кадр
+                        </Badge>
+                      )}
+                      {selectedMovie.codes.halfGray.includes('2') && (
+                        <Badge className="bg-orange-500/80 text-white animate-pulse-glow">
+                          <Icon name="AlertTriangle" size={14} className="mr-1" />
+                          Половина серая
+                        </Badge>
+                      )}
+                      {selectedMovie.codes.blackScreen.includes('2') && (
+                        <Badge className="bg-black/80 text-white animate-pulse-glow">
+                          <Icon name="AlertTriangle" size={14} className="mr-1" />
+                          Черный экран
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="aspect-video bg-gradient-to-br from-purple-900/50 to-blue-900/50 rounded-lg flex items-center justify-center border border-primary/30">
                   <span className="text-9xl">{selectedMovie?.avatar}</span>
