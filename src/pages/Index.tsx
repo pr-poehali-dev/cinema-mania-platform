@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import Icon from '@/components/ui/icon';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 
 interface Movie {
@@ -15,6 +16,8 @@ interface Movie {
   avatar: string;
   price: number;
   isPurchased: boolean;
+  isUserUploaded?: boolean;
+  videoUrl?: string;
   codes: {
     grayFrame: string;
     halfGray: string;
@@ -39,6 +42,12 @@ const Index = () => {
   });
   const [interruptionClicks, setInterruptionClicks] = useState(0);
   const [interruptionTimer, setInterruptionTimer] = useState<number | null>(null);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadAvatar, setUploadAvatar] = useState('🎥');
+  const [uploadPrice, setUploadPrice] = useState(5);
+  const [uploadedVideo, setUploadedVideo] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [movies, setMovies] = useState<Movie[]>([
     {
@@ -225,6 +234,80 @@ const Index = () => {
     }
   };
 
+  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      setUploadedVideo(file);
+      toast({
+        title: '✅ Видео выбрано',
+        description: file.name
+      });
+    } else {
+      toast({
+        title: '❌ Ошибка',
+        description: 'Пожалуйста, выберите видео файл',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const saveUploadedMovie = () => {
+    if (!uploadTitle.trim()) {
+      toast({
+        title: '❌ Ошибка',
+        description: 'Введите название фильма',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (!uploadedVideo) {
+      toast({
+        title: '❌ Ошибка',
+        description: 'Выберите видео файл',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const videoUrl = URL.createObjectURL(uploadedVideo);
+    const newMovie: Movie = {
+      id: Date.now(),
+      title: uploadTitle,
+      avatar: uploadAvatar,
+      price: uploadPrice,
+      isPurchased: false,
+      isUserUploaded: true,
+      videoUrl,
+      codes: {
+        grayFrame: '1111111111',
+        halfGray: '1111111111',
+        blackScreen: '1111111111',
+        interruption: '1111111111',
+        permanentInterruption: '1111111111'
+      }
+    };
+
+    setMovies([...movies, newMovie]);
+    toast({
+      title: '🎉 Успех!',
+      description: `Фильм "${uploadTitle}" добавлен в магазин!`
+    });
+
+    setIsUploadOpen(false);
+    setUploadTitle('');
+    setUploadAvatar('🎥');
+    setUploadPrice(5);
+    setUploadedVideo(null);
+  };
+
+  const deleteMovie = (movieId: number) => {
+    setMovies(movies.filter((m) => m.id !== movieId));
+    toast({
+      title: '🗑️ Удалено',
+      description: 'Фильм удалён'
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-900/20 p-4">
       <div className="max-w-7xl mx-auto">
@@ -257,7 +340,7 @@ const Index = () => {
         </header>
 
         <Tabs defaultValue="shop" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 bg-card/50 backdrop-blur-sm">
+          <TabsList className="grid w-full grid-cols-3 bg-card/50 backdrop-blur-sm">
             <TabsTrigger value="shop" className="gap-2">
               <Icon name="Store" size={18} />
               Магазин
@@ -265,6 +348,10 @@ const Index = () => {
             <TabsTrigger value="library" className="gap-2">
               <Icon name="Library" size={18} />
               Библиотека
+            </TabsTrigger>
+            <TabsTrigger value="my-videos" className="gap-2">
+              <Icon name="Upload" size={18} />
+              Мои видео
             </TabsTrigger>
           </TabsList>
 
@@ -353,6 +440,68 @@ const Index = () => {
                   ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="my-videos" className="space-y-4">
+            <Card className="border-primary/30 bg-card/50">
+              <CardContent className="p-6">
+                <Button
+                  onClick={() => setIsUploadOpen(true)}
+                  className="w-full bg-gradient-to-r from-accent to-primary hover:from-accent/80 hover:to-primary/80"
+                  size="lg"
+                >
+                  <Icon name="Plus" size={20} className="mr-2" />
+                  Загрузить видео
+                </Button>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {movies
+                .filter((m) => m.isUserUploaded)
+                .map((movie, idx) => (
+                  <Card
+                    key={movie.id}
+                    className="border-primary/30 hover:border-accent transition-all duration-300 animate-fade-in backdrop-blur-sm bg-card/80"
+                    style={{ animationDelay: `${idx * 0.1}s` }}
+                  >
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <span className="text-6xl">{movie.avatar}</span>
+                        <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/50">
+                          <Icon name="User" size={14} className="mr-1" />
+                          Моё
+                        </Badge>
+                      </div>
+                      <CardTitle className="text-lg mt-2">{movie.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>Цена: {movie.price} 🪙</span>
+                        <span>{movie.isPurchased ? 'Продано' : 'В продаже'}</span>
+                      </div>
+                      {movie.videoUrl && (
+                        <Button
+                          onClick={() => playMovie(movie)}
+                          variant="outline"
+                          className="w-full border-primary/50"
+                        >
+                          <Icon name="Play" size={16} className="mr-2" />
+                          Просмотр
+                        </Button>
+                      )}
+                      <Button
+                        onClick={() => deleteMovie(movie.id)}
+                        variant="destructive"
+                        className="w-full"
+                      >
+                        <Icon name="Trash2" size={16} className="mr-2" />
+                        Удалить
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
           </TabsContent>
         </Tabs>
 
@@ -452,6 +601,73 @@ const Index = () => {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+          <DialogContent className="max-w-xl bg-card/95 backdrop-blur-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Icon name="Upload" size={24} />
+                Загрузить видео
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Название фильма</label>
+                <Input
+                  value={uploadTitle}
+                  onChange={(e) => setUploadTitle(e.target.value)}
+                  placeholder="Введите название..."
+                  className="bg-background border-primary/30"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Аватарка (эмодзи)</label>
+                <Input
+                  value={uploadAvatar}
+                  onChange={(e) => setUploadAvatar(e.target.value)}
+                  placeholder="🎥"
+                  className="bg-background border-primary/30"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Цена (монеты)</label>
+                <Input
+                  type="number"
+                  value={uploadPrice}
+                  onChange={(e) => setUploadPrice(Number(e.target.value))}
+                  min={1}
+                  className="bg-background border-primary/30"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Видео файл</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoUpload}
+                  className="hidden"
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="outline"
+                  className="w-full border-primary/50"
+                >
+                  <Icon name="Upload" size={16} className="mr-2" />
+                  {uploadedVideo ? uploadedVideo.name : 'Выбрать видео'}
+                </Button>
+              </div>
+              <Button
+                onClick={saveUploadedMovie}
+                className="w-full bg-gradient-to-r from-primary to-accent"
+              >
+                <Icon name="Save" size={16} className="mr-2" />
+                Добавить в магазин
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={isPlayingMovie} onOpenChange={setIsPlayingMovie}>
           <DialogContent className="max-w-4xl bg-card/95 backdrop-blur-sm">
             <DialogHeader>
@@ -461,9 +677,17 @@ const Index = () => {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="aspect-video bg-gradient-to-br from-purple-900/50 to-blue-900/50 rounded-lg flex items-center justify-center border border-primary/30">
-                <span className="text-9xl">{selectedMovie?.avatar}</span>
-              </div>
+              {selectedMovie?.videoUrl ? (
+                <video
+                  src={selectedMovie.videoUrl}
+                  controls
+                  className="w-full aspect-video rounded-lg border border-primary/30"
+                />
+              ) : (
+                <div className="aspect-video bg-gradient-to-br from-purple-900/50 to-blue-900/50 rounded-lg flex items-center justify-center border border-primary/30">
+                  <span className="text-9xl">{selectedMovie?.avatar}</span>
+                </div>
+              )}
               {interruptionTimer && (
                 <Button
                   onClick={handleInterruptionClick}
